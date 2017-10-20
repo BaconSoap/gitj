@@ -98,6 +98,17 @@ if args.create:
 
     print('created issue: ' + issue.key + ' in project: ' + issue.fields.project.raw['name'])
 
+def run_unchecked(commands: [str]) -> subprocess.CompletedProcess:
+    return subprocess.run(commands, encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+def run(commands: [str], fail_text: str):
+    res = run_unchecked(commands)
+    if res.returncode != 0:
+        print(fail_text)
+        print(res.stdout)
+        print(res.stderr)
+        raise Exception
+
 if args.hotfix:
     title: str = args.title
     if title is None:
@@ -105,59 +116,38 @@ if args.hotfix:
         raise Exception
 
     # verify clean repo state
-    is_clean = subprocess.run(['git', 'diff-index', '--quiet', 'HEAD'], encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode
+    is_clean = run_unchecked(['git', 'diff-index', '--quiet', 'HEAD']).returncode
     if is_clean != 0:
         print('can only run hotfix on a clean repo. stash or discard changes before running again')
         raise Exception
 
-    #git ls-files --exclude-standard --others
-    untracked = subprocess.run(['git', 'ls-files', '--exclude-standard', '--others', '--'], encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    untracked = run_unchecked(['git', 'ls-files', '--exclude-standard', '--others', '--'])
     if len(untracked.stdout) != 0:
         print('can only run hotfix on a clean repo and there are currently new files. stash or discard changes before running again')
         raise Exception
 
     print('switching to master...')
-
-    switch_branch = subprocess.run(['git', 'checkout', 'master'], encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if switch_branch.returncode != 0:
-        print('failed to switch to master:')
-        print(switch_branch.stdout)
-        print(switch_branch.stderr)
-        raise Exception
+    run(['git', 'checkout', 'master'], 'failed to switch to master')
 
     print('fetching latest...')
-
-    fetch_latest = subprocess.run(['git', 'fetch', '-p'], encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if fetch_latest.returncode != 0:
-        print('failed to fetch latest:')
-        print(fetch_latest.stdout)
-        print(fetch_latest.stderr)
-        raise Exception
+    run(['git', 'fetch', '-p'], 'failed to fetch latest')
 
     print('resetting to origin/master...')
-
-    reset_head = subprocess.run(['git', 'reset', '--hard', 'origin/master'], encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if reset_head.returncode != 0:
-        print('failed to reset to origin/master:')
-        print(reset_head.stdout)
-        print(reset_head.stderr)
-        raise Exception
+    run(['git', 'reset', '--hard', 'origin/master'], 'failed to reset to origin/master')
 
     print('creating jira issue...')
-
     issue = create_issue(title, 'Bug')
+    print('created ' + issue.key + ': ' + title)
 
     key = issue.key.lower()
-    kebab_title = title.lower().replace(' ', '-').replace('?', '').replace(':', '').replace('/', '').replace('_', '-')
+    kebab_title = title.lower()\
+        .replace(' ', '-')\
+        .replace('_', '-')\
+        .replace('?', '')\
+        .replace(':', '')\
+        .replace('/', '')\
+        .replace('!', '')
     branch_name = 'hotfix/' + key + '-' + kebab_title
 
     print('creating and switching to new branch ' + branch_name + '...')
-
-    checkout_branch = subprocess.run(['git', 'checkout', '-b', branch_name], encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if checkout_branch.returncode != 0:
-        print('failed to checkout new branch:')
-        print(checkout_branch.stdout)
-        print(checkout_branch.stderr)
-        raise Exception
-
-    issue.delete()
+    run(['git', 'checkout', '-b', branch_name], 'failed to checkout new branch')
