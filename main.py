@@ -1,4 +1,3 @@
-import sys
 import keyring
 import argparse
 import os
