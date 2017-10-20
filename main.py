@@ -84,7 +84,10 @@ if args.create:
         issueType = 'Bug'
 
     jira = get_jira()
-    issue = jira.create_issue(project=defaults['project'], summary=args.title, issuetype={'name': issueType})
+    issue = jira.create_issue(project=defaults['project'],
+                              summary=args.title,
+                              issuetype={'name': issueType})
+    issue.update(fields={'customfield_10800': [{'value': defaults['team']}]})
     print('created issue: ' + issue.key + ' in project: ' + issue.fields.project.raw['name'])
-    issue.delete()
-    print('successfully deleted test issue')
+    #issue.delete()
+    #print('successfully deleted test issue')
